@@ -1,5 +1,5 @@
 ---
-title: "Ancestral Reconstruction: Theory & Practice"
+title: "Ancestral state reconstruction of phenotypic characters"
 authors:
   - name: Liam J. Revell
     department: Department of Biology
@@ -7,7 +7,7 @@ authors:
     location: Boston, MA 02125
     email: liam.revell@umb.edu
 abstract: |
-  Ancestral state reconstruction involves estimating the unknown trait values of hypothetical ancestral species at internal nodes of a phylogenetic tree. In this Chapter, I'll briefly illustrate the theory and practice of ancestral state reconstruction for both discrete and continuously-valued character traits, highlight several use cases \emph{via} a set of empirical examples, and discuss the statistical properties of ancestral state estimation as well as some of its limitations.
+  Ancestral state reconstruction involves estimating the unknown trait values of hypothetical ancestral species at internal nodes of a phylogenetic tree. In this review, I'll illustrate the theory and practice of ancestral state reconstruction for both discrete and continuously-valued phenotypic traits, highlight several use cases \emph{via} a set of empirical examples, and discuss the statistical properties of ancestral state estimation as well as its limitations.
 header-includes: |
     \usepackage{amsmath,mathtools,bm,nicematrix}
 bibliography: references.bib
@@ -17,34 +17,41 @@ output:
     base_format: rticles::arxiv_article
 csl: evolution.csl
 nocite: |
-  @Walker2012; @Yaxley2019; @Li2022, @Nielsen2002, @Hall2018
+  @Walker2012; @Yaxley2019; @Li2022, @Nielsen2002, @Hall2018, @Box1976
 ---
 
 ```{r, echo=FALSE, results="hide", message=FALSE}
 library(phytools)
 library(expm)
+library(doParallel)
+library(foreach)
 ```
+
+# Preface
+
+Some time during 2023 I was asked to contribute a section on 'Ancestral Reconstruction: Theory & Practice' for the second edition of a compendium titled the 'Encyclopedia of Evolutionary Biology' [@Kliman2016]. Not having carefully read the instructions, but enthusiastic about the task, I proceeded to write what I expected to be a lengthy book chapter on the subject, including some original research. As it turns out, and as I realized before submitting my article to the publisher, this was totally inconsistent with the aims of the project for which a much shorter and less detailed treatment of the subject was warranted. Having identified my blunder, I was forced to go back to the drawing board and produce a much more appropriate length piece for the Encyclopedia. This article is the fruit of my original labor and is geared towards researchers more interested in the technical details of ancestral reconstruction and its application.\footnote{As a sidenote, here recorded unironically as a footnote, let me add that though they overlap thematically, all of the text and content of this article is original and not redundant with my \emph{Encyclopedia of Evolutionary Biology} entry!} I hope that it can serve this purpose here.
+
 # Introduction
 
-Ancestral state reconstruction\footnote{Ancestral state reconstruction is also often referred to as \emph{ancestral character estimation}. These are the same thing, and I'll use the two terms interchangeably here.} is the general practice of estimating the value or values of a feature or attribute at the set of common ancestors of the operational taxa\footnote{Operational taxa are the named tips or leaves in a reconstructed phylogenetic tree. In many studies using phylogenetic comparative methods, operational taxa are nominal species, but they could also be subspecies, populations, cultural groups (in the case of language phylogenies), genera, or other units of study (e.g., Walker et al. 2012; Hall et al. 2018; Yaxley and Foley 2019; Li et al. 2022).} of a phylogenetic tree [@Schluter1997; @Yang2006-book; @Yang2014-book; @Revell2022-book]. Ancestral state reconstruction falls within the domain of phylogenetic comparative methods\footnote{For the purposes of this Chapter, phylogenetic comparative methods are the set of methodologies that are used (typically) \emph{downstream} of phylogenetic inference to test hypotheses about evolution based on a tree, and often in combination with trait data for the terminal taxa of that tree.} [@Pagel1997; @Nunn2011-book; @OMeara2012; @Harmon2019-book; @Revell2022-book], and has long been relentlessly popular. The popularity of ancestral reconstruction is easy to comprehend. Evolutionary biologists are often inherently interested in the evolutionary past, and ancestral character estimation promises us a window towards that otherwise invisible history [@Revell2022-book].
+Ancestral state reconstruction\footnote{Ancestral state reconstruction is also often referred to as \emph{ancestral character estimation}. These are the same thing, and I'll use the two terms interchangeably here.} is the general practice of estimating the value or values of a feature or attribute at the set of common ancestors of the operational taxa\footnote{Operational taxa are the named tips or leaves in a reconstructed phylogenetic tree. In many studies using phylogenetic comparative methods, operational taxa are nominal species, but they could also be subspecies, populations, cultural groups (in the case of language phylogenies), genera, or other units of study (e.g., Walker et al. 2012; Hall et al. 2018; Yaxley and Foley 2019; Li et al. 2022).} of a phylogenetic tree [@Schluter1997; @Yang2006-book; @Yang2014-book; @Revell2022-book]. Ancestral state reconstruction falls within the domain of phylogenetic comparative methods\footnote{For the purposes of this article, phylogenetic comparative methods are the set of methodologies that are used (typically) \emph{downstream} of phylogenetic inference to test hypotheses about evolution based on a tree, and often in combination with trait data for the terminal taxa of that tree.} [@Pagel1997; @Nunn2011-book; @OMeara2012; @Harmon2019-book; @Revell2022-book], and has long been relentlessly popular. The popularity of ancestral reconstruction is easy to comprehend. Evolutionary biologists are often inherently interested in the evolutionary past, and ancestral character estimation promises us a window towards that otherwise invisible history [@Revell2022-book].
 
-Undertaking ancestral state reconstruction requires that we have a reconstructed tree\footnote{Or set of trees, e.g., from a bootstrapping analysis or Bayesian posterior sample.}\textsuperscript{,}\footnote{None of the methods of this chapter technically require that our input tree be ultrametric or time-calibrated. Normally, however, I recommend using an ultrametric or time-calibrated tree unless we have a formal, \emph{a priori} hypothesis that the rate of evolution of our trait is better predicted by non-ultrametric branch lengths -- for instance the branch lengths obtained from Maximum Likelihood phylogeny inference -- than by units of chronological time. The circumstances in which this is true are, I believe, quite rare.}, as well as observations of a phenotypic trait of interest from some or all of the terminal taxa of that tree [@Nunn2011-book; @Revell2022-book]. Modern ancestral state reconstruction also requires that we have a model or hypothesized model for how our character trait evolved over the macroevolutionary time represented by our phylogeny.\footnote{At the risk of upsetting some enthusiasts, and apart from in this footnote, I will avoid discusing \emph{parsimony} as a procedure of ancestral state reconstruction here. Parsimony, better known as a technique of phylogeny inference, is a procedure whereby we seek to identify the set of ancestral states that will minimize the minimum number of evolutionary changes in our character that are required to explain the observed data pattern. This set of node values can then be characterized as the \emph{maximum parsimony} or \emph{most parsimonious} ancestral states. Even though this might seem sensible and will often provide very reasonable ancestral character estimates, parsimony leaves us with substantial difficulty in assessing the strength of evidence in support of this most parsimonious solution -- compared to, say, an alternative only slightly less parsimonious one -- and does not provide any firm criteria for averaging across any equally parsimonious sets of states. For this reason, and others, I have decided to focus on explicit, probabilistic procedures of ancestral state inference in this chapter.} Finally, we'll use a formal statistical inference procedure to obtain a set of estimates of our trait at some or all of the internal nodes of the tree.
+Undertaking ancestral state reconstruction requires that we have a reconstructed tree\footnote{Or set of trees, e.g., from a bootstrapping analysis or Bayesian posterior sample.}\textsuperscript{,}\footnote{None of the methods of this article technically require that our input tree be ultrametric or time-calibrated. Normally, however, I recommend using an ultrametric or time-calibrated tree unless we have a formal, \emph{a priori} hypothesis that the rate of evolution of our trait is better predicted by non-ultrametric branch lengths -- for instance the branch lengths obtained from Maximum Likelihood phylogeny inference -- than by units of chronological time. The circumstances in which this is true are, I believe, quite rare.}, as well as observations of a phenotypic trait of interest from some or all of the terminal taxa of that tree [@Nunn2011-book; @Revell2022-book]. Modern ancestral state reconstruction also requires that we have a model or hypothesized model for how our character trait evolved over the macroevolutionary time represented by our phylogeny.\footnote{At the risk of upsetting some enthusiasts, and apart from in this footnote, I will avoid discusing \emph{parsimony} as a method for ancestral state reconstruction here. Parsimony, better known as a technique of phylogeny inference, is a procedure whereby we seek to identify the set of ancestral states that will minimize the minimum number of evolutionary changes in our character that are required to explain the observed data pattern. This set of node values can then be characterized as the \emph{maximum parsimony} or \emph{most parsimonious} ancestral states. Even though this might seem sensible and will often provide very reasonable ancestral character estimates, parsimony leaves us with substantial difficulty in assessing the strength of evidence in support of this most parsimonious solution -- compared to, say, an alternative only slightly less parsimonious one -- and does not provide any firm criteria for averaging across any equally parsimonious sets of states. For this reason, and others, I have decided to focus on explicit, probabilistic procedures of ancestral state inference in this article.} Finally, we'll use a formal statistical inference procedure to obtain a set of estimates of our trait at some or all of the internal nodes of the tree.
 
-In the sections below, I'll first offer some preliminaries on the goals of this chapter and on terminology. I'll then proceed to describe the procedures for estimating ancestral phenotypes, first for discrete and then for continuously-valued traits, accompanying each section with a small number of empirical examples. Finally, I'll discuss some limitations of ancestral state estimation, focusing particularly on those arising from identifiable inadequacies of the assumed trait evolution model.
+In the sections below, I'll first offer some preliminaries on the goals of this article and on terminology. I'll then proceed to describe the procedures for estimating ancestral phenotypes, first for discrete and then for continuously-valued traits, accompanying each section with a small number of empirical examples. Finally, I'll discuss some limitations of ancestral state estimation, focusing particularly on those arising from identifiable inadequacies of the assumed trait evolution model.
 
 # Preliminaries
 
-This chapter focuses on phylogenetic ancestral state reconstruction of discrete and continuously-valued phenotypic traits. A phylogenetic tree is a acyclic\footnote{Acyclic just means that the graph doesn't form loops or cycles.}, directed graph, typically used as a model to represent the historical relationships among species unified by common descent [@Felsenstein2004-book; @Yang2014-book; @Revell2022-book]. Phylogenies are also used to approximate other entities connected via a similar form of ancestor-descendant relationship, such as human cultural groups, viral sequences of an emerging infectious disease, or metastatic tumor cell lines in a cancer patient [e.g., @Gray2009; @Nunn2011-book; @Somarelli2017; @Turakhia2020; @Quinn2021].
+This article focuses on phylogenetic ancestral state reconstruction of discrete and continuously-valued phenotypic traits. A phylogenetic tree is a acyclic\footnote{Acyclic just means that the graph doesn't form loops or cycles.}, directed graph, typically used as a model to represent the historical relationships among species unified by common descent [@Felsenstein2004-book; @Yang2014-book; @Revell2022-book]. Phylogenies are also used to approximate other entities connected via a similar form of ancestor-descendant relationship, such as human cultural groups, viral sequences of an emerging infectious disease, or metastatic tumor cell lines in a cancer patient [e.g., @Gray2009; @Nunn2011-book; @Somarelli2017; @Turakhia2020; @Quinn2021].
 
 Phylogenies consist of three main components: nodes, branches, and tips [@Yang2006-book; @Baum2012-book; @Revell2022-book]. Nodes are hypothetical ancestral taxa located at the nexus point of two or more descendant branches. A branch (often referred to as an *edge*, and I'll use the terms interchangeably here)\footnote{Branch is the term that predominates in the phylogenetic literature, whereas edge is used more commonly by biomathematicians and graph theoreticians.} is a connection between two different nodes: parent (i.e., ancestral) and daughter (i.e, descendant). Branches often have the property of length, which, in the type of tree used for ancestral state reconstruction, often represents elapsed time in some unit. Finally, a tip (often referred to as a *leaf*, and I'll sometimes use that term here) is an external node of the tree, not connected to any descendant nodes, that is used to represent a species or other operational taxon of the phylogeny. Once again, in the type of phylogenetic tree used for ancestral state reconstruction, tips most often have as an attribute a label, indicating to which taxon they correspond [@Felsenstein2004-book; @Baum2012-book].
 
-Though ancestral state reconstruction can also be undertaken for nucleotide sequence or other molecular characters [e.g., @Yang2014-book], in this chapter I'll focus on ancestral state reconstruction of phenotypic traits [@Schluter1997; @Nunn2011-book; @Revell2022-book]. A phenotypic trait is an observable attribute -- be it physical, morphological, behavioral, ecological, physiological, cellular, etc. -- of the operational taxa of the tree. In the field of phylogenetic comparative biology, we conventionally subdivide phenotypic traits into two general categories (whilst realizing that some traits may not fall neatly into either): discrete and continuous [@Pagel1997; @Felsenstein2004-book; @Revell2022-book; @Revell2024]. 
+Though ancestral state reconstruction can also be undertaken for nucleotide sequence or other molecular characters [e.g., @Yang2014-book], in this article I'll focus on ancestral state reconstruction of phenotypic traits [@Schluter1997; @Nunn2011-book; @Revell2022-book]. A phenotypic trait is an observable attribute -- be it physical, morphological, behavioral, ecological, physiological, cellular, etc. -- of the operational taxa of the tree. In the field of phylogenetic comparative biology, we conventionally subdivide phenotypic traits into two general categories (whilst realizing that some traits may not fall neatly into either): discrete and continuous [@Pagel1997; @Felsenstein2004-book; @Revell2022-book; @Revell2024]. 
 
 Discrete characters are phenotypic attributes that can only assume one of fixed and finite set of values [@Revell2022-book]. These might range from a discretely-categorized ecological trait [e.g., marine vs. freshwater habitat use in fishes, @BetancurR2015], to a counted meristic character [e.g., pre-caudal vertebra number in primates, @Spear2023], to a behavioral specialization [e.g., diel activity pattern in vertebrates, @Anderson2017], to a categorical physical attribute [e.g., carotenoid-pigmented feathers in birds, @Thomas2014].
 
 Continuous characters, on the other hand, are phenotypic traits that can assume any of an infinite number of values on a real number scale [@Revell2022-book]. Continuous characters needn't be *unbounded* -- for example, a continuous character is often bounded on the lower end by the value of zero. Nonetheless, unbounded evolution is a frequent assumption of continuous character models in phylogenetic comparative analysis [but see @Boucher2016].\footnote{A continuous trait, such as body size, that is bounded on the lower end by zero can often be transformed to an unbounded scale by computing the logarithm. Indeed, this is a common practice for continuous traits in phylogenetic comparative biology.} A continuous trait might range from a linearly measured morphological feature [e.g., orbit size in extant and extinct cetaceans, @Churchill2021], to a mass or volume [e.g., encephalization in birds, @MarugnLobn2021], to a continuously-varying life history trait [e.g., average gestational length in mammals, @Danis2023], even to a molecular genomic attribute [e.g., genome size in plants, @Wang2021].
 
-Our distinction between discrete or continuous characters seems relatively clear when put forward in this manner. Nonetheless, as previously alluded, it may not always be straightforward to decide *a priori* whether a character should be coded as discretely or continuously-valued. For example, plumage color could be quantified numerically using a reflectance spectrometer or scored discretely against a palette containing a finite number of elements [e.g., @DurnCastillo2021]. A meristic (counted) trait might differ discontinuously from individual to individual, but vary intraspecifically such that among-species differences are better-approximated as a continuous random variable than placed in discrete bins. The position of this chapter is that the best way to reconcile this paradox, and contemplate whether a character trait should be categorized as discrete or continuous, is to consider the decision to be an implicit component of our model: in other words, as a necessary approximation of reality. If our trait varies in a manner that is closer to discontinuous than continuous, then (as a model approximation) treating it as discretely-valued is probably most appropriate! Logically, the converse will also be true.
+Our distinction between discrete or continuous characters seems relatively clear when put forward in this manner. Nonetheless, as previously alluded, it may not always be straightforward to decide *a priori* whether a character should be coded as discretely or continuously-valued. For example, plumage color could be quantified numerically using a reflectance spectrometer or scored discretely against a palette containing a finite number of elements [e.g., @DurnCastillo2021]. A meristic (counted) trait might differ discontinuously from individual to individual, but vary intraspecifically such that among-species differences are better-approximated as a continuous random variable than placed in discrete bins. The position of this article is that the best way to reconcile this paradox, and contemplate whether a character trait should be categorized as discrete or continuous, is to consider the decision to be an implicit component of our model: in other words, as a necessary approximation of reality. If our trait varies in a manner that is closer to discontinuous than continuous, then (as a model approximation) treating it as discretely-valued is probably most appropriate! Logically, the converse will also be true.
 
 # Discrete characters
 
@@ -127,11 +134,11 @@ In which $P(1|0,t_{A})$ is the (1,2)th element of $\mathbf{P}_{t=0.3}$, $P(0|0,t
 
 After we calculate all the relevant quantities of our equation, we should find that the total probability of our data on this tree is 0.0267, given our transition matrix (**Q**) and modeled process.\footnote{Importantly, this is the probability of observing the data pattern [1, 0, 0] given our tree and matrix \textbf{Q}, not the probability of the tree or \textbf{Q}. That means that if we were to identify all possible data patterns ([0, 0, 0], [0, 0, 1], and so on), compute their probabilities, and then sum these quantities, this sum should be equal to 1.0.} In this case, for demonstrative purposes only, I've explicitly enumerated all of the possible internal node and root states of our tree; however, this would become very onerous for even a modestly-sized phylogeny of five or ten operational taxa.\footnote{Indeed, it's virtually impossible for larger trees.} Fortunately, @Felsenstein1981 described a highly efficient 'pruning'\footnote{Felsenstein's procedure is called a pruning algorithm because it proceeds in a ``post-order'' fashion -- that is, from the tips towards the root of the tree -- performing a calculation based only on the descendant subtree of each internal node, pruning this subtree out of the phylogeny, and then using the computed quantities for the next, more rootward calculation.} algorithm to compute this exact probability.
 
-So far we've treated **Q** as if it were fixed. In practice, we invariably *estimate* **Q**, typically by identifying the value of **Q** that maximizes the probability of our data given the tree: our Maximum Likelihood estimate, by definition [@Revell2022-book]. Obviously, it makes little sense to try and estimate **Q** from a tree containing only three observations! Consequently, for now we'll continue using this same fixed value of **Q**, but we should at the same time keep in mind that in any empirical studies **Q** is nearly invariably estimated from the same data that are being used to reconstruct ancestral states -- rather than set to a fixed value or known \emph{a priori}.
+So far we've treated **Q** as if it were fixed. In practice, we invariably *estimate* **Q**, typically by identifying the value of **Q** that maximizes the probability of our data given the tree: our Maximum Likelihood estimate, by definition [@Revell2022-book]. Obviously, it makes little sense to try to estimate **Q** from a tree containing only three observations! Consequently, for now we'll continue using this same fixed value of **Q**, but we should at the same time keep in mind that in any empirical studies **Q** is nearly invariably estimated from the same data that are being used to reconstruct ancestral states -- rather than set to a fixed value or known \emph{a priori}.
 
 ## Marginal vs. joint ancestral state estimation
 
-An important consideration when discussing ancestral state reconstruction of discrete characters is the distinction between what are known as *marginal* and *joint* reconstruction [@Yang2006-book; @Revell2022-book].\footnote{In theory, the same distinction could be made for continuous traits -- except that, in that case, our marginal and joint estimates are the same!} Marginal reconstruction involves proceeding from node to node on the phylogeny, and, at each node, computing the probability of observing the tip data of our tree conditioned on fixing the node we've visited to each one of the set of distinct values of our trait. This set of probabilities, referred to as marginal likelihoods, are normally rescaled such that they add to 1.0,\footnote{Doing so merely entails dividing each by the total likelihood.} at which point they're frequently referred to as the node *marginal scaled likelihoods*. Yang [-@Yang2006-book; -@Yang2014-book] has pointed out that these scaled likelihoods are also a type of empirical Bayes posterior probability.\footnote{Empirical Bayes estimation involve fixing one level of the Bayesian heirarchy -- in this case, the value of our transition matrix \textbf{Q} -- to its most likely value, and then computing our posterior probabilities conditioning on this fixed level.} They can thus be validly interpreted as the (posterior) probabilities that each node is in each of the observed character states, whilst conditioning on our fitted transition process, **Q**. Joint reconstruction, on the other hand, involves identifying the set of all internal node values (among all possible such sets) that maximizes the probability of our data. As observed by @Yang2006-book, these needn't necessarily be the set of states with the highest marginal scaled likelihoods!
+An important consideration when discussing ancestral state reconstruction of discrete characters is the distinction between what are known as *marginal* and *joint* reconstruction [@Yang2006-book; @Revell2022-book].\footnote{In theory, the same distinction could be made for continuous traits -- except that, in that case, our marginal and joint estimates are the same!} Marginal reconstruction involves proceeding from node to node on the phylogeny, and, at each node, computing the probability of observing the tip data of our tree conditioned on fixing the node we've visited to each one of the set of distinct values of our trait. This set of probabilities, referred to as marginal likelihoods, are normally rescaled such that they add to 1.0,\footnote{Doing so merely entails dividing each by the total likelihood.} at which point they're frequently referred to as the node *marginal scaled likelihoods*. Yang [-@Yang2006-book; -@Yang2014-book] has pointed out that these scaled likelihoods are also a type of empirical Bayes posterior probability.\footnote{Empirical Bayes estimation involve fixing one level of the Bayesian heirarchy -- in this case, the value of our transition matrix \textbf{Q} -- to its most likely value, and then computing our posterior probabilities while conditioning on this fixed level.} They can thus be validly interpreted as the (posterior) probabilities that each node is in each of the observed character states, whilst conditioning on our fitted transition process, **Q**. Joint reconstruction, on the other hand, involves identifying the set of all internal node values (among all possible such sets) that maximizes the probability of our data. As observed by @Yang2006-book, these needn't necessarily be the set of states with the highest marginal scaled likelihoods!
 
 ## Marginal ancestral state estimation
 
@@ -164,7 +171,7 @@ P(root=1) & = \pi_{1} \times P(0|1,t_{AB}) \times P(1|0,t_{A}) \times P(0|0,t_{B
 ```{r, echo=FALSE, results="hide", message=FALSE}
 c(P0,P1)/(P0+P1)
 ```
-Here $P(root = 0)$ gives the probability of our observed data (conditioning on **Q**), given that the root is in state 0; while $P(root = 1)$ gives the probability of our data, given that the root is in state 1.\footnote{Importantly, $P(root = 0)$ and $P(root = 1)$ \emph{do not} give the probability that the root state was in condition 0 or condition 1, respectively. If they did, then we would expect their values to add to 1.0!} If these two quantities are rescaled by their sum, however (which is also, recall, the total likelihood), we obtain the marginal scaled likelihoods for states 0 and 1 of $P(0,1) = [0.878, 0.122]$ at the root node of the tree.
+Here $P(root = 0)$ gives the probability of our observed data (conditioning on **Q**), given that the root is in state 0; while $P(root = 1)$ gives the probability of our data, given that the root is in state 1.\footnote{Importantly, $P(root = 0)$ and $P(root = 1)$ \emph{do not} give the probability that the root state was in condition 0 or condition 1, respectively. If they did, then we would expect their values to add to 1.0! Just to reiterate what is also stated in the main text, they give the probabilities of \emph{our tip data} (under the model) given that the root is in condition 0 or in condition 1, respectively.} If these two quantities are rescaled by their sum, however (which is also, recall, the total likelihood), we obtain the marginal scaled likelihoods for states 0 and 1 of $P(0,1) = [0.878, 0.122]$ at the root node of the tree.
 
 Now let's repeat the same procedure for the single internal node of our phylogeny of Figure 1.
 
@@ -195,7 +202,7 @@ P(internal=1) & = \pi_{0} \times P(1|0,t_{AB}) \times P(1|1,t_{A}) \times P(0|1,
 ```{r, echo=FALSE, results="hide", message=FALSE}
 c(P0,P1)/(P0+P1)
 ```
-Once again, if these two quantities are rescaled by their sum, which is also the total likelihood (just as it was for the root node), we'll have the marginal scaled likelihoods for conditions 0 and 1 of $P(0,1) = [0.822, 0.178]$. Figure 2a gives the marginal ancestral state reconstruction of our tree and data in Figure 1,\footnote{Mapped to the corresponding nodes of the tree using a pie diagram, as is very commonly done in empirical studies that use marginal ancestral state reconstruction.} conditioned on the value of **Q** indicated earlier in the chapter.
+Once again, if these two quantities are rescaled by their sum, which is also the total likelihood (just as it was for the root node), we'll have the marginal scaled likelihoods for conditions 0 and 1 of $P(0,1) = [0.822, 0.178]$. Figure 2a gives the marginal ancestral state reconstruction of our tree and data in Figure 1,\footnote{Mapped to the corresponding nodes of the tree using a pie diagram, as is very commonly done in empirical studies that use marginal ancestral state reconstruction.} conditioned on the value of **Q** indicated earlier in the article.
 
 ```{r fig2, echo=FALSE, fig.width=5, fig.height=2.5, dpi=300, fig.cap="(a) Marginal ancestral state reconstruction based on the tree and data of Figure 1. (b) Joint ancestral reconstruction. See main text for more details."}
 par(mfrow=c(1,2))
@@ -204,19 +211,21 @@ plotTree(tree,ftype="i",offset=1,fsize=1.2,mar=c(0.1,1.1,2.1,1.1),
 points(rep(0.7,3),1:3,pch=22,cex=2.5,bg=c("white","white","black"))
 anc<-ancr(fitMk(tree,x,fixedQ=Q))
 nodelabels(pie=anc$ace,piecol=c("white","black"),cex=2)
-mtext("a) marginal reconstruction",adj=0.1,line=1)
+mtext("a) marginal reconstruction",adj=0.1,line=1,cex=0.8)
 plotTree(tree,ftype="i",offset=1,fsize=1.2,mar=c(0.1,1.1,2.1,1.1),
   xlim=c(-0.1,0.9),ylim=c(0.7,3.3))
 points(rep(0.7,3),1:3,pch=22,cex=2.5,bg=c("white","white","black"))
 nodelabels(pie=matrix(c(1,1,0,0)),piecol=c("white","black"),cex=2)
-mtext("b) joint reconstruction",adj=0.1,line=1)
+mtext("b) joint reconstruction",adj=0.1,line=1,cex=0.8)
 ```
+
+As for computing the total likelihood, above, for demonstrative purposes I have enumerated all the terms of each marginal likelihood. This would quickly become prohibitively complicated for even modestly-sized phylogenies so in practice computer implementations of marginal ancestral state reconstruction use one of various fast algorithms based on pruning to compute these quantities [@Felsenstein1981; @Yang2006-book].
 
 ## Joint reconstruction
 
 The other type of ancestral state reconstruction that we might perform under the M*k* model, in addition to the method of marginal ancestral state reconstruction that we just learned, is what's typically referred to as *joint* reconstruction [@Yang2006-book; @Revell2022-book]. In this case, our estimated ancestral states are merely the set of such states that jointly maximize the probability of our data at the tips of the tree.
 
-In our example from Figure 1, there are a total of four possible *sets* of states at the two nodes of the phylogeny: $[0,0]$, $[0,1]$, $[1,0]$, and $[1,1]$.\footnote{In general, there will be a number $k^m$ of such sets for $k$ character levels and $m$ nodes.} Uncoincidentally, these four sets of states correspond to the four terms of our equation for the probability of our data ($P(0,0,1)$), above. In other words:
+In our example from Figure 1, there are a total of four possible *sets* of states at the two nodes of the phylogeny: $[0,0]$, $[0,1]$, $[1,0]$, and $[1,1]$.\footnote{In general, there will be a number $k^m$ of such sets for $k$ character levels and $m$ nodes. It goes without saying that computer implementations of joint ancestral state reconstruction do not comprehensively enumerate all possible node state combinations to find the set that maximizes the likelihood!} Uncoincidentally, these four sets of states correspond to the four terms of our equation for the probability of our data ($P(0,0,1)$), above. In other words:
 
 ```{r, echo=FALSE, results="hide", message=FALSE}
 P00=0.5*P4[1,1]*P3[1,2]*P3[1,1]*P7[1,1]
@@ -478,7 +487,7 @@ mtext("c)",line=1,adj=0)
 
 ## The Brownian motion model
 
-The standard model employed to study the evolution of continuous traits, as well as (especially) to reconstruct their ancestral values, is one called the Brownian motion model [@Felsenstein1973-a; @Felsenstein1985; @OMeara2006; @Harmon2019-book]. Brownian motion is a continuous time, directionless, random walk model [@Harmon2019-book; @Revell2022-book]. Under Brownian motion, successive evolutionary changes are independent and come from a Gaussian distribution with mean of 0 and variance of $\sigma^2 \times t$, in which $\sigma^2$ is the instantaneous rate of the Gaussian process and $t$ is the elapsed time [@Harmon2019-book]. Figure 9 shows a simulation of Brownian motion\footnote{Technically to create the visualization I discretized the depth of the tree into 200 units making this a discrete-time random walk, but the effect is the same.} evolution (Figure 9b) on the same simplified phylogenetic tree of three taxa that we saw earlier in the chapter (e.g., Figure 1), but in which I have re-colored the edges with different shades of gray (Figure 9a) so that they can be matched more easily with the Brownian trait evolution scenario (Figure 9b).
+The standard model employed to study the evolution of continuous traits, as well as (especially) to reconstruct their ancestral values, is one called the Brownian motion model [@Felsenstein1973-a; @Felsenstein1985; @OMeara2006; @Harmon2019-book]. Brownian motion is a continuous time, directionless, random walk model [@Harmon2019-book; @Revell2022-book]. Under Brownian motion, successive evolutionary changes are independent and come from a Gaussian distribution with mean of 0 and variance of $\sigma^2 \times t$, in which $\sigma^2$ is the instantaneous rate of the Gaussian process and $t$ is the elapsed time [@Harmon2019-book]. Figure 9 shows a simulation of Brownian motion\footnote{Technically to create the visualization I discretized the depth of the tree into 200 units making this a discrete-time random walk, but the effect is the same.} evolution (Figure 9b) on the same simplified phylogenetic tree of three taxa that we saw earlier in the article (e.g., Figure 1), but in which I have re-colored the edges with different shades of gray (Figure 9a) so that they can be matched more easily with the Brownian trait evolution scenario (Figure 9b).
 
 ```{r fig9, echo=FALSE, fig.width=8, fig.height=4, dpi=300, fig.cap="(a) Three-taxon phylogenetic tree of Figure 1, but in which each edge of the tree has been plotted with a different color. (b) Single illustrative realization of Brownian motion evolution on the tree of figure panel (a). See main text for more details.", out.width = "100%"}
 set.seed(77)
@@ -528,7 +537,7 @@ phenogram(tt,x,colors=cols,add=TRUE,col="white",lwd=2)
 mtext("b)",adj=0)
 ```
 
-Brownian motion evolution will produce a realized trait vector of phenotypic values among species that has an expected value ($\text{E}[x]$) equal to the root state ($x_0$), and a multivariate normal distribution with variance equal to the total height of each tip above the root multiplied by the instantaneous Brownian rate, $\sigma^2$ [@OMeara2006]. In other words $\mathbf{x} \sim \mathit{MVN}(x_0,\sigma^2\mathbf{C})$ in which **C** is an $N \times N$ matrix (for *N* tips in the tree), where each *i*,*j*th element contains the height above the root of the most recent common ancestor of taxa *i* and *j*. This matrix, **C**, for our phylogeny of Figure 9a would be calculated as follows.
+Brownian motion evolution will produce a realized trait vector of phenotypic values among species that has an expected value ($\text{E}[x]$) equal to the root state ($x_0$), and a multivariate normal distribution with variance equal to the total height of each tip above the root multiplied by the instantaneous Brownian rate, $\sigma^2$ [@OMeara2006]. In other words $\mathbf{x} \sim \mathit{MVN}(x_0,\sigma^2\mathbf{C})$ in which **C** is an $N \times N$ matrix (for *N* tips in the tree), where each *i*,*j*th element contains the height above the root of the most recent common ancestor of taxa *i* and *j*. This matrix, **C**, for our phylogeny of Figure 9a would be calculated as follows [@Revell2022-book].
 
 $$
 \mathbf{C} = 
@@ -576,7 +585,7 @@ internal & 0.4 & 0.4 & 0.0 & 0.4
 \end{bNiceMatrix}
 $$
 
-To find the set of ancestral states under Brownian motion that maximize the probability of our observed data (our ML states), we simply identify the internal node values and root state ($x_0$) that jointly maximize the probability of the tip data given our model. Figure 10 gives a log-likelihood surface for the ancestral values at the root node of the tree (on the *x*-axis) and the single internal node: showing the maximum likelihood values of $x_0$ and $x_\mathit{internal}$ to be 1.29 and 1.82, respectively. The figure also includes an illustrative course of numerical optimization on this likelihood surface, though this result would (of course) depend on our starting value and specific optimization routine (Figure 10).
+To find the set of ancestral states under Brownian motion that maximize the probability of our observed data (our ML states), we simply identify the internal node values and root state ($x_0$) that jointly maximize the probability of the tip data given our model. Figure 10 gives a log-likelihood surface for the ancestral values at the root node of the tree (on the *x*-axis) and the single internal node: showing the maximum likelihood values of $x_0$ and $x_\mathit{internal}$ to be 1.29 and 1.82, respectively. The figure also includes an illustrative course of numerical optimization on this likelihood surface, though this result would (naturally) depend on our starting value and specific optimization routine (Figure 10).
 
 ```{r fig10, echo=FALSE, fig.width=5, fig.height=4, dpi=300, fig.cap="Log-likelihood surface for the numerical values of the root and internal nodes of the tree and phenotypic trait data of Figure 9. The grey line shows an illustration of numerical optimization on this surface which convergences to the Maximum Likelihood values of both node states. See main text for more details."}
 library(mnormt)
@@ -609,7 +618,7 @@ lines(PAR,cex=0.2,lwd=2,col="darkgrey")
 points(PAR,pch=16,cex=0.7)
 ```
 
-In practice, rapid algorithms have been identified to find the set of internal node values that maximize the probability density of the data under our model [e.g., @Rohlf2001]. In fact, @Rohlf2001 points out that the Maximum Likelihood ancestral state at any node *i* can be expressed as a simple weighted average of the tip taxa values, in which the set of weights ($\mathbf{w}_i$) is given by the following expression.
+In practice, rapid algorithms have been identified to find the set of internal node values that maximize the probability density of the data under our model [e.g., @Rohlf2001]. For instance, @Rohlf2001 points out that the Maximum Likelihood ancestral state at any node *i* can be expressed as a simple weighted average of the tip taxa values, in which the set of weights ($\mathbf{w}_i$) is given by the following expression.
 
 $$
 \mathbf{w}_{i} = 
@@ -756,19 +765,19 @@ Though relentlessly popular, ancestral character estimation has been subject to 
 
 Observing that the confidence intervals around ancestral states are broad is not the same as arguing that they are wrong, however: it's merely a reminder that phylogenetic comparative methods are ordinary statistical methods too [@Revell2018; @Revell2022-book]. As such, it would be incorrect to treat an estimated ancestral state as if it were a quantity known without error [@Losos2011]. Indeed, when the our underlying model assumptions are valid, ancestral state estimation has suitable statistical properties [@Revell2022-book].
 
-A more pernicious problem arises when the model is wrong [@Revell2022-book].\footnote{Or, rather `badly wrong' -- seeing how, in point of fact, all models are wrong, even if many are useful (to paraphrase the statistician George Box).} Under these circumstances, it becomes possible to *confidently* estimate wrong ancestral node states.\footnote{This, too, one could argue, falls into the category of ancestral state reconstruction behaving as do all normal statistical methods! On the other hand, some evidence suggests that ancestral reconstruction is particularly sensitive to model assumption violations.}
+A more pernicious problem arises when the model is wrong [@Revell2022-book].\footnote{Or, rather `badly wrong' -- seeing how, in point of fact, all models are wrong, even if many are useful (to paraphrase the statistician George Box, 1976).} Under these circumstances, it becomes possible to *confidently* estimate wrong ancestral node states.\footnote{This, too, one could argue, falls into the category of ancestral state reconstruction behaving as do all normal statistical methods! On the other hand, some evidence suggests that ancestral reconstruction is particularly sensitive to model assumption violations.}
 
-To investigate ancestral state estimation when model assumptions are violated, I'll consider two different case studies: discrete character evolution under the hidden-rates model [@Beaulieu2013]; and bounded Brownian evolution [@Boucher2016]. I will show that when an incorrect model is used (specifically, a homogenous-rate M*k* model for the former data and unbounded Brownian motion for the latter), bad statistical behavior emerges. On the other hand, however, I will also show that this effect is substantively diminished under the correct, generating model for each case.
+To investigate ancestral state estimation when model assumptions are violated, I'll consider three different case studies: discrete character evolution under the hidden-rates model [@Beaulieu2013]; discrete trait evolution under the threshold model [@Felsenstein2005; @Felsenstein2012; @Revell2014b]; and bounded Brownian evolution [@Boucher2016]. I'll show that when an incorrect model is used (specifically, a homogenous-rate M*k* model for the discrete data and unbounded Brownian motion for continuous characters), bad statistical behavior emerges. On the other hand, however, I will also show that this effect is substantively diminished under the correct, generating model for each case.
 
 ## Ancestral state estimation when the model is right
 
 Before showing that ancestral state estimation can misbehave when the model of evolution is *wrong*, it seems useful to undertake a very brief exploration of the properties of ancestral state reconstruction when the model used for estimation fully captures the generating evolutionary process: in other words, when the model is "right." This is genuinely the best case scenario for ancestral character estimation, so we might expect to find statistical properties are optimal in this scenario.
 
-To begin with, I simulated 100 stochastic, pure-birth phylogenies, each containing a total of 501 taxa (and thus 500 internal nodes), with a total root to tip height of 10.0.\footnote{This tree depth has no particular meaning. By trial and error I discovered that it tended to result in a relatively even distribution of marginal scaled likelihoods across simulations.} I next generated one binary (0/1) character and one continuous character for each tree. The discrete character was simulated with a generating value of **Q** that matched the illustrative value of **Q** used earlier in the chapter.
+To begin with, I simulated 100 stochastic, pure-birth phylogenies, each containing a total of 501 taxa (and thus 500 internal nodes), with a total root to tip height of 10.0.\footnote{This tree depth has no particular meaning. By trial and error I discovered that it tended to result in a relatively even distribution of marginal scaled likelihoods across simulations.} I next generated one binary (0/1) character and one continuous character for each tree. The discrete character was simulated with a generating value of **Q** that matched the illustrative value of **Q** used earlier in the article.
 
 $$\mathbf{Q} = \begin{bmatrix}-q_{0,1} & q_{0,1} \\ q_{1,0} & -q_{1,0}\end{bmatrix} = \begin{bmatrix}-0.2 & 0.2\\ 0.2 & -0.2\end{bmatrix}$$
 
-In addition to this discretely-valued character, I also simulated one continuous trait for each tree was simulated using a starting value of $x_0 = 0.0$ and a Brownian motion (stochastic diffusion) rate of $\sigma^2 = 1.0$.
+In addition to this discretely-valued character, I also simulated one continuous trait for each tree under Brownian motion using a starting value of $x_0 = 0.0$ and a Brownian motion (stochastic diffusion) rate of $\sigma^2 = 1.0$.
 
 ```{r, echo=FALSE, eval=FALSE}
 ## load packages
@@ -868,15 +877,15 @@ To measure the performance of ancestral state reconstruction for discrete charac
 
 To measure the performance of ancestral state estimation when the generating model was known for continuous characters, I simply quantified the fraction of node-wise 95\% confidence intervals for which the true value fell within the interval.\footnote{I could have also measured the correlation between the generating and estimated values, or the average difference (bias) between the known values and the estimates.}
 
-Figure 13 summarizes the results of this analysis. In Figure 13a, we see that the relative frequency of being in condition ``1'' closely tracks the marginal scaled likelihoods. In Figure 13b, we likewise see that the distribution of true node values that fall on the 95\%, averaged by simulation, is centered closely on 95\%, with a mean of 94.98\% and a range of $[0.916, 0.976]$ (Figure 13). In summary, when the model for estimation is *correct*, ancestral state reconstruction can work precisely as intended.
+Figure 13 summarizes the results of this analysis. In Figure 13a, we see that the relative frequency of being in condition "1" closely tracks the marginal scaled likelihoods. In Figure 13b, we likewise see that the distribution of true node values that fall on the 95\%, averaged by simulation, is centered closely on 95\%, with a mean of 94.98\% and a range of $[0.916, 0.976]$ (Figure 13). In summary, when the model for estimation is *correct*, ancestral state reconstruction can work precisely as intended.
 
 ## Ancestral state estimation when the model is wrong
 
-In the previous section, I illustrated how ancestral state reconstruction can be statistically well-behaved when the model for estimation is correct. Using a pair of very simple examples, I'll now try to demonstrate how ancestral character estimation might go astray when the model for estimation is badly wrong. I'll do this by simulating data under two different trait evolution models that we haven't yet discussed: one for discrete characters; and a second for continuous traits. Note that the purpose of this section is not to prove that we can recover the good statistical behavior of ancestral state reconstruction when the *correct* model is used, though that is sometimes true and will be true in this particular cases. To the contrary, my intention is to highlight the substantial sensitivity or vulnerability to model assumption violations of our standard reconstruction methods.
+In the previous section, I illustrated how ancestral state reconstruction can be statistically well-behaved when the model for estimation is correct. Using a trio of very simple examples, I'll now try to demonstrate how ancestral character estimation might go astray when the model for estimation is badly wrong. I'll do this by simulating data under three different trait evolution models that we haven't yet discussed: two for discrete characters; and a third for continuous traits. Note that the purpose of this section is not to prove that we can recover the good statistical behavior of ancestral state reconstruction when the *correct* model is used, though that is sometimes true and will be true in these particular cases. To the contrary, my intention is to highlight the substantial sensitivity or vulnerability to model assumption violations of our standard reconstruction methods.
 
 ### Ancestral states under a hidden-rates model
 
-To show this, I'll first use a model called the hidden-rates model [@Marazzi2012; @Beaulieu2013; @Revell2022-book; @Revell2024]. The hidden-rates model is one in which, for each observed level of a discrete trait, there might be one or more unobserved conditions, each with their own rates of transition of the observed state. Figure 14 illustrates evolution under a flavor of the hidden-rates model in which the observed condition "1" has two hidden levels: "1" in which the trait can still transition back to the "0" form; and "1\*" in which it cannot.\footnote{The character codndition of ``1*'' is also then an `absorbing' state for the character.} An attribute of trait evolution under the hidden-rates model is heterogeneity in the rate of transition between states. This is apparent in Figure 14b and 14c in which we see that transitions occur frequently between the two visible conditions of the trait, "0" and "1", until the condition "1" changes to the hidden state "1\*" (Figure 14). It's relatively easy to imagine a trait that could evolve in this way. Considering parity mode in squamate reptiles, for instance, perhaps when viviparity (which, in some squamates might be called `ovoviviparity' and is little more than egg retention through hatching), has recently evolved, it can still be lost. Over time, however, additional adaptations or loss of function mutations accumulate and viviparity eventually evolves into a condition from which oviparity can no longer re-evolve. This evolutionary scenario would be well-captured by the model illustrated in Figure 14. 
+To show this, I'll first use a model called the hidden-rates model [@Marazzi2012; @Beaulieu2013; @Boyko2021; @Revell2022-book; @Revell2024]. The hidden-rates model is one in which, for each observed level of a discrete trait, there might be one or more unobserved conditions, each with their own rates of transition of the observed state. Figure 14 illustrates evolution under a flavor of the hidden-rates model in which the observed condition "1" has two hidden levels: "1" in which the trait can still transition back to the "0" form; and "1\*" in which it cannot.\footnote{The character codndition of ``1*'' is also then an `absorbing' state for the character.} An attribute of trait evolution under the hidden-rates model is heterogeneity in the rate of transition between states. This is apparent in Figure 14b and 14c in which we see that transitions occur frequently between the two visible conditions of the trait, "0" and "1", until the condition "1" changes to the hidden state "1\*" (Figure 14). It's relatively easy to imagine a trait that could evolve in this way. Considering parity mode in squamate reptiles, for instance, perhaps when viviparity (which, in some squamates might be called `ovoviviparity' and is little more than egg retention through hatching), has recently evolved, it can still be lost. Over time, however, additional adaptations or loss of function mutations accumulate and viviparity eventually evolves into a condition from which oviparity can no longer re-emerge. This evolutionary scenario would be well-captured by the model illustrated in Figure 14. 
 
 ```{r fig14, echo=FALSE, fig.width=10, fig.height=5, dpi=300, out.width = "100%", fig.cap="A graphical illustration of the hidden rates model. (a) The structure of a hidden-rates model with one hidden, absorbing condition (``1*'') of the observed level ``1''. (b) Simulated evolution with both hidden levels of ``1'' shown. (c) Simulated history from (b), but with the two levels of ``1'' merged into a single, observed trait. See main text for more details."}
 set.seed(13)
@@ -998,7 +1007,7 @@ asr_x.hrm[,"prop"]<-asr_x.hrm[,"actual"]/asr_x.hrm[,"count"]
 asr_x.hrm[is.nan(asr_x.hrm[,"prop"]),"prop"]<-0
 save(trees,x,fits_x,anc_x,asr_x,fits_x.hrm,anc_x.hrm,asr_x.hrm,file="data/asr-hrm.rda")
 ```
-```{r fig15, echo=FALSE, fig.width=10, fig.height=5.5, dpi=300, out.width = "100%", fig.cap="Accuracy of ancestral state reconstruction of discrete characters when the hidden rate model of Figure 14 was used for simulation. (a) Node marginal scaled likelihoods (of state ``1'') compared to the relative frequency that each node was in that condition using a standard M\\emph{k} model for estimation. (b) The same as (a), but in which the generating hidden-rates model was used. If the scaled likelihoods are an accurate measure of the true probability of that each node was in each character state, then these values should form a 1:1 line. Point diameters have been scaled by the natural logarithm of the sample size (number of nodes) for each bin.  See main text for additional details."}
+```{r fig15, echo=FALSE, fig.width=10, fig.height=5.5, dpi=300, out.width = "100%", fig.cap="Accuracy of ancestral state reconstruction of discrete characters when the hidden rate model of Figure 14 was used for simulation. (a) Node marginal scaled likelihoods (of state ``1'') compared to the relative frequency that each node was in that condition using a standard M\\emph{k} model for estimation. (b) The same as (a), but in which the generating hidden-rates model was used. If the scaled likelihoods are an accurate measure of the true probability of that each node was in each character state, then these values should form a 1:1 line. As in Figure 13, point diameters have been scaled by the natural logarithm of the sample size (number of nodes) for each bin.  See main text for additional details."}
 load("data/asr-hrm.rda")
 par(mfrow=c(1,2),mar=c(5.1,4.1,3.1,1.1))
 plot(NA,xlim=c(0,1),ylim=c(0,1),
@@ -1058,11 +1067,222 @@ The result from this analysis is given in Figure 15a. Even though most points fa
 
 In addition to simply reconstructing under the standard M*k* model, we also fit and estimated ancestral states using the hidden-rates model, which was the generating evolutionary scenario of our data. The results from this analysis are given in Figue 15b which more closely resembles panel a of Figure 13 (in which the true model was known and used for estimation) than it does Figure 15a. This suggests that good statistical properties of estimation are largely recovered when the correct model is used.
 
+## Ancestral states under the threshold model
+
+The next discrete character evolution model that we'll consider is one that's called the threshold model [@Wright1934; @Felsenstein2005; @Felsenstein2012]. Under the threshold model, our discrete character is underlain by an unobserved quantitative trait called 'liability.' Every time liability crosses a pre-defined (but unknown) threshold, our observed discrete character changes state. The model derives originally from evolutionary quantitative genetics where it was used by @Wright1934 to describe variation in digit number of guinea pigs, but was much later adapted by Felsenstein (2005; 2012) to phylogenetic comparative biology. A simulation of discrete character evolution under the threshold model is given in Figure 16. Panel (a) of the figure shows the Brownian evolution of the normally unobserved liabilities (and thresholds), whereas panel (b) illustrates the resultant discrete trait evolution on the branches and nodes of the phylogeny.
+
+```{r fig16, echo=FALSE, fig.width=8, fig.height=4, dpi=300, out.width = "100%", fig.cap="Illustration of evolution under the threshold model. (a) The evolution of liabilities: the unobserved continuous character whose condition determines the state of the discrete trait. The thresholds between discrete character levels in the threshold trait are shown using the vertical dotted lines. (b) The realized evolution of the discrete character across the branches and nodes of the phylogeny. See main text for more details."}
+set.seed(77)
+N<-200
+t<-100
+b<-(log(N)-log(2))/t
+tree<-pbtree(b=b,n=N,t=t,type="discrete",quiet=TRUE)
+layout(mat=matrix(c(1,2),1,2),widths=c(0.5,0.5))
+par(mar=c(3.1,1.1,2.1,0.1),
+  col.lab="transparent",fg="transparent",
+  col.axis="transparent")
+th<-c(0,2)
+cols<-grey(seq(0,0.8,length.out=3))
+tt<-bmPlot(tree,type="threshold",
+  anc=mean(th),thresholds=th,axes=FALSE,
+  sig2=1/t,bty="n",ngen=t,colors=cols)
+par(col.lab="black",fg="black",
+  col.axis="black")
+abline(v=th,lty="dotted",lwd=2)
+axis(1,cex.axis=0.8)
+mtext("a)",line=0.5,adj=0.01)
+plot(tt$tree,tt$colors,lwd=1.5,direction="upwards",ftype="off",
+  mar=c(3.1,1.1,2.1,1.1))
+mtext("b)",line=0.5,adj=0.01)
+```
+
+Various features of the evolution of our discrete character are manifestly different between Figure 16b and evolution under a standard M*k* scenario. Most conspicuously, and not unlike the hidden-rates model of Figure 14, the tempo of evolutionary change for the discrete trait varies from clade to clade of the tree. This is because in parts of the tree where the evolutionary process for the liability is close to a threshold, the character changes frequently in state. By contrast, when the liability is far from any threshold, the discrete character may experience long periods of stasis with little to no change at all [@Revell2014b; @Revell2022-book].
+
+To simulate evolution under the threshold model, I used the same one hundred, 501 taxon phylogenies that were simulated for the previous sections. I next simulated a continuous trait (liability) evolving via Brownian motion with a rate equal to $\sigma^2 = 0.1$, an ancestral value of $x_0 = 2.0$, and thresholds between character levels of $[0, 1, 3]$.\footnote{This typically resulted in four levels of the discrete character, but in a small subset of simulations only three character levels were observed.} For each dataset, I fit an ordered M*k* model,\footnote{I chose to do this because the threshold model itself is intrinsically ordered.} as well as the threshold model. To fit the threshold model I used the discrete approximation of Boucher and Démery (2016; Revell 2024). For each fitted model, I computed marginal ancestral states in the typical way. Finally, as in Figure 16, I compared the marginal scaled likelihoods that each node was in each state to the *genuine* frequency of the node being in the corresponding condition. If the ancestral state reconstruction method is working properly, these values should form a 1:1 line. The result of this analysis is shown in Figure 17.
+
+```{r, eval=FALSE, echo=FALSE}
+set.seed(99)
+ntaxa<-501
+nsim<-100
+foo<-function(tree,th){
+  x<-rep("a",Ntip(tree))
+  while(length(unique(x))==1){
+    liability<-fastBM(tree,a=mean(th),
+      sig2=1/max(nodeHeights(tree)),internal=TRUE)
+    thresholds<-setNames(c(th,Inf),
+      letters[1:(length(th)+1)])
+    x<-threshState(liability,thresholds)
+  }
+  x
+}
+
+x<-lapply(trees,foo,th=c(0,1,3))
+
+x.obs<-lapply(x,function(x,n) x[1:n],n=ntaxa)
+
+## make cluster
+ncores<-min(nsim,detectCores()-1)
+mc<-makeCluster(ncores,type="PSOCK")
+registerDoParallel(cl=mc)
+
+thresh_fits<-foreach(i=1:nsim)%dopar%{
+  obj<-list()
+  class(obj)<-"try-error"
+  while(inherits(obj,"try-error")){
+    obj<-try(phytools::fitThresh(trees[[i]],x.obs[[i]],levs=200))
+  }
+  obj
+}
+
+anc_x.thresh<-foreach(i=1:nsim)%dopar%{
+  phytools::ancr(thresh_fits[[i]])
+}
+  
+asr_x.thresh<-data.frame(
+  bin=seq(0.01,0.99,by=0.02),
+  count=rep(0,50),
+  actual=rep(0,50),
+  prop=rep(0,50))
+for(i in 1:nsim){
+  for(j in 1:nrow(asr_x.thresh)){
+    for(k in 1:ncol(anc_x.thresh[[i]]$ace)){
+      ii<-intersect(which(anc_x.thresh[[i]]$ace[,k]>=(asr_x.thresh[j,1]-0.01)),
+        which(anc_x.thresh[[i]]$ace[,k]<=(asr_x.thresh[j,1]+0.01)))
+      asr_x.thresh[j,"count"]<-asr_x.thresh[j,"count"]+length(ii)
+      asr_x.thresh[j,"actual"]<-asr_x.thresh[j,"actual"]+
+        sum(x[[i]][ntaxa+ii]==colnames(anc_x.thresh[[i]]$ace)[k])
+    }
+  }
+}
+asr_x.thresh[,"prop"]<-asr_x.thresh[,"actual"]/asr_x.thresh[,"count"]
+asr_x.thresh[is.nan(asr_x.thresh[,"prop"]),"prop"]<-0
+
+plot(asr_x.thresh[,c(1,4)])
+abline(a=0,b=1)
+
+stopCluster(mc)
+
+########################################
+
+set.seed(99)
+
+## make cluster
+ncores<-min(nsim,detectCores()-1)
+mc<-makeCluster(ncores,type="PSOCK")
+registerDoParallel(cl=mc)
+
+ordered<-matrix(c(
+  0,1,0,0,
+  2,0,3,0,
+  0,4,0,5,
+  0,0,6,0),4,4,dimnames=list(letters[1:4],letters[1:4]))
+mk_fits<-foreach(i=1:nsim)%dopar%{
+  model<-ordered[sort(unique(x.obs[[i]])),
+    sort(unique(x.obs[[i]]))]
+  phytools::fitMk(trees[[i]],x.obs[[i]],model=model,
+    pi="fitzjohn",lik.func="pruning")
+}
+
+anc_x.mk<-foreach(i=1:nsim)%dopar%{
+  phytools::ancr(mk_fits[[i]])
+}
+
+asr_x.mk<-data.frame(
+  bin=seq(0.01,0.99,by=0.02),
+  count=rep(0,50),
+  actual=rep(0,50),
+  prop=rep(0,50))
+for(i in 1:nsim){
+  for(j in 1:nrow(asr_x.mk)){
+    for(k in 1:ncol(anc_x.mk[[i]]$ace)){
+      ii<-intersect(which(anc_x.mk[[i]]$ace[,k]>=(asr_x.mk[j,1]-0.01)),
+        which(anc_x.mk[[i]]$ace[,k]<=(asr_x.mk[j,1]+0.01)))
+      asr_x.mk[j,"count"]<-asr_x.mk[j,"count"]+length(ii)
+      asr_x.mk[j,"actual"]<-asr_x.mk[j,"actual"]+
+        sum(x[[i]][ntaxa+ii]==colnames(anc_x.mk[[i]]$ace)[k])
+    }
+  }
+}
+asr_x.mk[,"prop"]<-asr_x.mk[,"actual"]/asr_x.mk[,"count"]
+asr_x.mk[is.nan(asr_x.mk[,"prop"]),"prop"]<-0
+
+plot(asr_x.mk[,c(1,4)])
+abline(a=0,b=1)
+
+stopCluster(mc)
+
+save(trees,x,x.obs,thresh_fits,anc_x.thresh,asr_x.thresh,
+  mk_fits,anc_x.mk,asr_x.mk,file="data/asr-thresh.rda")
+```
+```{r fig17, echo=FALSE, fig.width=10, fig.height=5.5, dpi=300, out.width = "100%", fig.cap="Accuracy of ancestral state reconstruction of discrete characters when the hidden rate model of Figure 16 was used for simulation. (a) Node marginal scaled likelihoods compared to the relative frequency that each node was in that condition using a standard M\\emph{k} model for estimation. (b) The same as (a), but in which the generating threshold model was used. If the scaled likelihoods are an accurate measure of the true probability of that each node was in each character state, then these values should form a 1:1 line. Point diameters have been scaled by the natural logarithm of the sample size (total number of probabilities computed) for each bin. Note that these don't sum to the number of nodes because multiple values are calculated for each node in each simulation, depending on the number of levels (3 or 4) of the trait. See main text for additional details."}
+load("data/asr-thresh.rda")
+par(mfrow=c(1,2),mar=c(5.1,4.1,3.1,1.1))
+plot(NA,xlim=c(0,1),ylim=c(0,1),
+  las=1,cex.axis=0.7,cex.lab=0.8,bty="n",
+  xlab="marginal scaled likelihoods",
+  ylab="relative frequency true state")
+lines(c(0,1),c(0,0),lty="dotted")
+segments(x0=asr_x.mk[,"bin"],y0=rep(0,nsim),
+  x1=asr_x.mk[,"bin"],y1=asr_x.mk[,"prop"],
+  col="grey")
+points(asr_x.mk[,c("bin","prop")],pch=21,
+  cex=log(asr_x.mk$count)/4,bg="white")
+lines(c(0,1),c(0,1),lwd=2,col="black",lty="dashed")
+points(asr_x.mk[,c("bin","prop")],pch=21,
+  cex=log(asr_x.mk$count)/4,bg=make.transparent("grey",0.7))
+legend("topleft",c("1:1 line",
+  paste(c(min(asr_x.mk$count),
+    round(exp(mean(log(asr_x.mk$count)))),
+    prettyNum(max(asr_x.mk$count),big.mark=",")),"probs")),
+  lwd=c(2,NA,NA,NA),
+  pch=c(NA,21,21,21),
+  lty=c("dashed",NA,NA,NA),
+  col=c("black","black","black","black"),
+  pt.bg=c(NA,"grey","grey","grey"),
+  pt.cex=round(c(NA,min(log(asr_x.mk$count)/4),
+    mean(log(asr_x.mk$count)/4),
+    max(log(asr_x.mk$count)/4)),4),
+  bty="n",inset=0.05,cex=0.8,y.intersp=1.5,
+  seg.len=3)
+mtext("a)",adj=0,line=1)
+##
+plot(NA,xlim=c(0,1),ylim=c(0,1),
+  las=1,cex.axis=0.7,cex.lab=0.8,bty="n",
+  xlab="marginal scaled likelihoods",
+  ylab="relative frequency true state")
+lines(c(0,1),c(0,0),lty="dotted")
+segments(x0=asr_x.thresh[,"bin"],y0=rep(0,nsim),
+  x1=asr_x.thresh[,"bin"],y1=asr_x.thresh[,"prop"],col="grey")
+points(asr_x.thresh[,c("bin","prop")],pch=21,
+  cex=log(asr_x.thresh$count)/4,bg="white")
+lines(c(0,1),c(0,1),lwd=2,col="black",lty="dashed")
+points(asr_x.thresh[,c("bin","prop")],pch=21,
+  cex=log(asr_x.thresh$count)/4,
+  bg=make.transparent("grey",0.7))
+legend("topleft",c("1:1 line",
+  paste(c(min(asr_x.thresh$count),
+    prettyNum(round(exp(mean(log(asr_x.thresh$count)))),big.mark=","),
+    prettyNum(max(asr_x.thresh$count),big.mark=",")),
+    "probs")),lwd=c(2,NA,NA,NA),
+  pch=c(NA,21,21,21),
+  lty=c("dashed",NA,NA,NA),
+  col=c("black","black","black","black"),
+  pt.bg=c(NA,"grey","grey","grey"),
+  pt.cex=round(c(NA,min(log(asr_x.thresh$count)/4),
+    mean(log(asr_x.thresh$count)/4),
+    max(log(asr_x.thresh$count)/4)),4),
+  bty="n",inset=0.05,cex=0.8,y.intersp=1.5,
+  seg.len=3)
+mtext("b)",adj=0,line=1)
+```
+
+As is evident from the figure, I found marginal ancestral reconstruction to be quite inaccurate when the M*k* model was used for estimation (Figure 17a). In particular, marginal scaled likelihoods tended to overestimate the probability that a node was in each state when low, and underestimate the same quantity when high (Figure 17a). In contrast, when estimation was performed using the generating, threshold model, good statistical behavior of marginal estimation was fully recovered (Figure 17b).
+
 ### Ancestral states under bounded Brownian motion
 
-As discussed earlier in this chapter, the typical model for ancestral state reconstruction of continuous traits is one of unbounded Brownian motion evolution, also known as stochastic diffusion or a continuous time random walk. To investigate the sensitivity of continuous character ancestral state reconstruction to model misspecification, we first generated 100 datasets, one for each our 100 simulated 501 taxon trees of the previous two sections. In this case, however, our generating model is *bounded* Brownian evolutionary change, with $x_0 = 0.0$, $\sigma^2 = 1.0$, and upper and lower bounds of $[-2, 2]$. Bounded Brownian motion (with reflexive bounds) is just like standard Brownian motion, but in which whenever the boundary condition is reached, the evolutionary process reflects back into the bounded space [@Boucher2016]. 
+As discussed earlier in this article, the typical model for ancestral state reconstruction of continuous traits is one of unbounded Brownian motion evolution, also known as stochastic diffusion or a continuous time random walk. To investigate the sensitivity of continuous character ancestral state reconstruction to model misspecification, we first generated 100 datasets, one for each our 100 simulated 501 taxon trees of the previous two sections. In this case, however, our generating model is *bounded* Brownian evolutionary change, with $x_0 = 0.0$, $\sigma^2 = 1.0$, and upper and lower bounds of $[-2, 2]$. Bounded Brownian motion (with reflective bounds) is just like standard Brownian motion, but in which whenever the boundary condition is reached, the evolutionary process reflects back into the bounded space [@Boucher2016]. 
 
-Following simulation, we first reconstructed ancestral states under a standard (unbounded) Brownian model, and then under *bounded* Brownian evolution, the latter utilizing the method of @Boucher2016. We measured the statistical behavior of ancestral state estimation in the same way as in Figure 13b; however, since the true value of an estimated parameter might fall within the confidence interval of the estimate either because the estimate is accurate or because the confidence interval is wide, we *also* measured accuracy of ancestral estimates by calculating the correlation between the known generating values and the estimates for each simulation. The results of this analysis are given in Figure 16.
+Following simulation, we first reconstructed ancestral states under a standard (unbounded) Brownian model, and then under *bounded* Brownian evolution, the latter utilizing the method of @Boucher2016. We measured the statistical behavior of ancestral state estimation in the same way as in Figure 13b; however, since the true value of an estimated parameter might fall within the confidence interval of the estimate either because the estimate is accurate or because the confidence interval is wide, we *also* measured accuracy of ancestral estimates by calculating the correlation between the known generating values and the estimates for each simulation. The results of this analysis are given in Figure 18.
 
 ```{r, eval=FALSE, echo=FALSE}
 ## load packages
@@ -1101,7 +1321,7 @@ save(trees,y,y.obs,a,anc_bm,anc_bounded,
   bounded_fits,nsim,ntaxa,onCI.bm,onCI.bounded,
   file="data/asr-bounded.rda")
 ```
-```{r fig16, echo=FALSE, fig.width=10, fig.height=5.5, dpi=300, out.width = "100%", fig.cap="Accuracy of ancestral state reconstruction of  continuous characters when data were simulated under Brownian motion evolution with reflexive bounds. (a) Frequency distribution of the fraction of nodes falling in within the 95\\% confidence interval of each node estimate, averaged across all nodes by simulation both when a standard Brownian model (grey) and bounded model (shading lines) was used for estimation. (b) Distribution of correlation between true and estimated ancestral states when the data were generated under bounded Brownian evolution, and either a standard Brownian motion model (grey) or bounded model (shading lines) was used for estimation. See main text for additional details."}
+```{r fig18, echo=FALSE, fig.width=10, fig.height=5.5, dpi=300, out.width = "100%", fig.cap="Accuracy of ancestral state reconstruction of  continuous characters when data were simulated under Brownian motion evolution with reflective bounds. (a) Frequency distribution of the fraction of nodes falling in within the 95\\% confidence interval of each node estimate, averaged across all nodes by simulation both when a standard Brownian model (grey) and bounded model (shading lines) was used for estimation. (b) Distribution of correlation between true and estimated ancestral states when the data were generated under bounded Brownian evolution, and either a standard Brownian motion model (grey) or bounded model (shading lines) was used for estimation. See main text for additional details."}
 load("data/asr-bounded.rda")
 nsim<-length(trees)
 par(mfrow=c(1,2),mar=c(5.1,4.1,3.1,1.1))
@@ -1174,9 +1394,9 @@ legend("topleft",c("unbounded BM","bounded BM"),
 mtext("b)",adj=0,line=1)
 ```
 
-We see that when data are simulated under bounded Brownian evolution, but unbounded Brownian motion is assumed as a model for estimation, confidence intervals are too narrow (Figure 16a), with a mean fraction of true ancestral states falling within the 95\% confidence intervals of the estimates of 80.8\% (range: $[71.6, 87.6]$; Figure 16a). By contrast, almost exactly 95\% of confidence intervals estimated under *bounded* Brownian evolution [@Boucher2016] included the true, generating values of the states (average: 94.6\%; range: $[92.0, 97.8]$; Figure 16a).
+We see that when data are simulated under bounded Brownian evolution, but unbounded Brownian motion is assumed as a model for estimation, confidence intervals are too narrow (Figure 18a), with a mean fraction of true ancestral states falling within the 95\% confidence intervals of the estimates of 80.8\% (range: $[71.6, 87.6]$; Figure 18a). By contrast, almost exactly 95\% of confidence intervals estimated under *bounded* Brownian evolution [@Boucher2016] included the true, generating values of the states (average: 94.6\%; range: $[92.0, 97.8]$; Figure 16a).
 
-In addition to having the correct confidence intervals, estimates obtained under bounded Brownian motion were also more accurate (Figure 16b). The mean correlation between generating and estimated ancestral states when *unbounded* Brownian evolution was assumed as a model for estimation was $\bar{r} = 0.822$ -- compared to a mean of $\bar{r} = 0.843$ when the correct model was used (Figure 16b).
+In addition to having the correct confidence intervals, estimates obtained under bounded Brownian motion were also more accurate (Figure 18b). The mean correlation between generating and estimated ancestral states when *unbounded* Brownian evolution was assumed as a model for estimation was $\bar{r} = 0.822$ -- compared to a mean of $\bar{r} = 0.843$ when the correct model was used (Figure 18b).
 
 # A short note on implementation
 
@@ -1184,10 +1404,10 @@ Ancestral character estimation is implemented in the R statistical computing sof
 
 # Conclusions
 
-Ancestral state reconstruction has long been among the most relentlessly popular analyses of phylogenetic comparative biology. In this chapter, I have tried to overview the theoretical and practical basics of ancestral state reconstruction for discrete and continuously-valued character traits. I have shown how ancestral state reconstruction can be applied to empirical datasets of various types, such as estimating the ancestral conditions of environmental temperature in liolaemid lizards, diel activity pattern in primates, or body size in frogs.
+Ancestral state reconstruction has long been among the most relentlessly popular analyses of phylogenetic comparative biology. In this article, I have tried to overview the theoretical and practical basics of ancestral state reconstruction for discrete and continuously-valued character traits. I have shown how ancestral state reconstruction can be applied to empirical datasets of various types, such as estimating the ancestral conditions of environmental temperature in liolaemid lizards, diel activity pattern in primates, or body size in frogs.
 
 In spite of its popularity, ancestral state estimation has some limitations. In particular, ancestral node estimates often come associated with very broad confidence limits, deep in the phylogenetic tree. Additionally, ancestral state reconstruction can be highly sensitive to violations of the assumptions of the evolutionary model used for estimation. Though both of these attributes (broad confidence intervals when the amount of information about a parameter is low; and sensitivity to model assumptions) are properties of many statistical inference methods, enthusiasts of ancestral state reconstruction have sometimes failed to sufficiently appreciate the nature and depth of these limitations.
 
-In an age when phylogenetic data is ever easier to produce, I have little doubt that the appeal of ancestral character state reconstruction will continue to grow into the future. I hope that this chapter will provide a helpful introductory guide to those biologists and scientists of other disciplines who dare to venture into this endeavor.
+In an age when phylogenetic data is ever easier to produce, I have little doubt that the appeal of ancestral character state reconstruction will continue to grow into the future. I hope that this article will provide a helpful introductory guide to those biologists and scientists of other disciplines who dare to venture into this endeavor.
 
 # References
