@@ -84,7 +84,7 @@
 
 
 \begin{abstract}
-Ancestral state reconstruction is a phylogenetic comparative method that involves estimating the unknown trait values of hypothetical ancestral taxa at internal nodes of a phylogenetic tree. Ancestral state reconstruction has long been, and continues to remain, among the most popular analyses in phylogenetic comparative research. In this review, I illustrate the theory and practice of ancestral state reconstruction for both discretely and continuously-valued phenotypic traits. For discrete characters, I focus on the M\emph{k} model and describe the distinction between marginal and joint reconstruction, as well as between local vs.~global estimation. For continuous traits, I describe ancestral state reconstruction under a model of Brownian motion evolution. I highlight several use cases of ancestral state reconstruction \emph{via} a set of empirical examples, ranging from diel activity pattern in primates, to environmental tolerance in lizards. Finally, I discuss and explore the statistical properties of ancestral state estimation as well as its limitations. By illustrating ancestral reconstruction under the hidden-rates and threshold models (for discrete traits), and bounded Brownian motion (for continuous characters), I demonstrate the considerable sensitivity of ancestral reconstruction to model mispecification. Although ancestral state reconstruction is virtually certain to retain its popularity into the future, I conclude by recommending considerable caution and circumspection in the use and interpretation of ancestral reconstruction in empirical evolutionary research.
+Ancestral state reconstruction is a phylogenetic comparative method that involves estimating the unknown trait values of hypothetical ancestral taxa at internal nodes of a phylogenetic tree. Ancestral state reconstruction has long been, and continues to remain, among the most popular analyses in phylogenetic comparative research. In this review, I illustrate the theory and practice of ancestral state reconstruction for both discretely and continuously-valued phenotypic traits. For discrete characters, I focus on the M\emph{k} model and describe the distinction between marginal and joint reconstruction, as well as between local vs.~global estimation. For continuous traits, I describe ancestral state reconstruction under a model of Brownian motion evolution. I highlight several use cases of ancestral state reconstruction \emph{via} a set of empirical examples, ranging from diel activity pattern in primates, to environmental tolerance in lizards. Finally, I discuss and explore the statistical properties of ancestral state estimation as well as its limitations. By illustrating ancestral reconstruction under the hidden-rates and threshold models (for discrete traits), and bounded Brownian motion (for continuous characters), I demonstrate the considerable sensitivity of ancestral reconstruction to model misspecification. Although ancestral state reconstruction is virtually certain to retain its popularity into the future, I conclude by recommending considerable caution and circumspection in the use and interpretation of ancestral reconstruction in empirical evolutionary research.
 \end{abstract}
 
 
@@ -160,7 +160,7 @@ So far we've treated \textbf{Q} as if it were fixed. In practice, we invariably 
 
 An important consideration when discussing ancestral state reconstruction of discrete characters is the distinction between what are known as \emph{marginal} and \emph{joint} reconstruction (Yang 2006; Revell and Harmon 2022).\footnote{In theory, the same distinction could be made for continuous traits -- except that, in that case, our marginal and joint estimates are the same!} Marginal reconstruction involves proceeding from node to node on the phylogeny, and, at each node, computing the probability of observing the tip data of our tree conditioned on fixing the node we've visited to each one of the set of distinct values of our trait. This set of probabilities, referred to as marginal likelihoods, are normally rescaled such that they add to 1.0,\footnote{Doing so merely entails dividing each by the total likelihood.} at which point they're frequently referred to as the node \emph{marginal scaled likelihoods}. Yang (2006, 2014) has pointed out that these scaled likelihoods are also a type of empirical Bayes posterior probability.\footnote{Empirical Bayes estimation involve fixing one level of the Bayesian heirarchy -- in this case, the value of our transition matrix \textbf{Q} -- to its most likely value, and then computing our posterior probabilities while conditioning on this fixed level.} They can thus be validly interpreted as the (posterior) probabilities that each node is in each of the observed character states, whilst conditioning on our fitted transition process, \textbf{Q}. Joint reconstruction, on the other hand, involves identifying the set of all internal node values (among all possible such sets) that maximizes the probability of our data. As observed by Yang (2006), these needn't necessarily be the set of states with the highest marginal scaled likelihoods!
 
-An addition to marginal vs.~joint ancestral state reconstruction, another distinction that occasionally appears in the literature is between \emph{global} and \emph{local} reconstruction (Pagel 1999). In this case, the distinction involves the estimation of \textbf{Q} itself. Under global reconstruction, we estimate our transition matrix \textbf{Q} (using, say, Maximum Likelihood) only \emph{once} based on the phylogeny and all the data at the tips of the tree, without any particular assumption about the value of our character at any individual node of the phylogeny (apart from the root -- see my discussion of the root prior, \(\pi\), above). We then proceed to undertake ancestral state reconstruction while holding \textbf{Q} constant at this value (Yang et al. 1995; Koshi and Goldstein 1996; Pagel 1999; Yang 2006; Revell and Harmon 2022). Under \emph{local} ancestral state reconstruction, on the other hand, \textbf{Q} is co-estimated separately with every internal node state value. Although Pagel (1999) argued fairly persuasively for the merits of local ancestral state reconstruction of discrete traits, the global method (in which \textbf{Q} is held constant) has nonetheless come to predominate ancestral state estimation of discrete traits (Revell and Harmon 2022).\footnote{Indeed, in earlier drafts of this article I didn't even include this discussion!} I'll focus on global ancestral state estimation in the sections that follow; however, the reader can keep in mind (if they like) that local estimation would merely involve substituting a different value of \textbf{Q} for each state or set of states\footnote{Normally that value of \textbf{Q} that maximized the likelihood, conditioned on that state or set of states.} at internal nodes during estimation. All other calculations are unchanged from what's shown below.
+In addition to marginal vs.~joint ancestral state reconstruction, another potentially important distinction that occasionally appears in the literature is between \emph{global} and \emph{local} reconstruction (Pagel 1999). In this case, the difference between global and local involves the estimation of \textbf{Q} itself. Under global reconstruction, we estimate our transition matrix \textbf{Q} (using, say, Maximum Likelihood) only \emph{once} based on the phylogeny and all the data at the tips of the tree, without any particular assumption about the value of our character at any individual node of the phylogeny (apart from the root -- see my discussion of the root prior, \(\pi\), above). We then proceed to undertake ancestral state reconstruction while holding \textbf{Q} constant at this value (Yang et al. 1995; Koshi and Goldstein 1996; Schluter et al. 1997; Pagel 1999; Yang 2006; Revell and Harmon 2022). Under \emph{local} ancestral state reconstruction, on the other hand, \textbf{Q} is co-estimated separately with every internal node state value (Pagel 1999). Although Pagel (1999) argued fairly persuasively for the merits of local ancestral state reconstruction of discrete traits, the global method (in which \textbf{Q} is held constant) has nonetheless come to predominate ancestral state estimation of discrete traits (Revell and Harmon 2022).\footnote{Indeed, in earlier drafts of this article I didn't even include this discussion!} I'll focus on global ancestral state estimation in the sections that follow; however, the reader can keep in mind (if they like) that local estimation would merely involve substituting a different value of \textbf{Q} for each state or set of states\footnote{Normally that value of \textbf{Q} that maximized the likelihood, conditioned on that state or set of states.} at internal nodes during estimation. All other calculations are unchanged from what's shown below.
 
 \subsection{Marginal ancestral state estimation}\label{marginal-ancestral-state-estimation}
 
@@ -601,7 +601,7 @@ Beaulieu, J., B. O'Meara, J. Oliver, and J. Boyko. 2023. \href{https://github.co
 Betancur‐R., R., G. Ortí, and R. A. Pyron. 2015. \href{https://doi.org/10.1111/ele.12423}{Fossil‐based comparative analyses reveal ancient marine ancestry erased by extinction in ray‐finned fishes}. Ecology Letters 18:441--450. Wiley.
 
 \bibitem[\citeproctext]{ref-Blackburn2020}
-Blackburn, D. C., S. V. Nielsen, M. F. Barej, J. Doumbia, M. Hirschfeld, N. G. Kouamé, D. Lawson, S. Loader, C. Ofori‐Boateng, E. L. Stanley, and M. Rödel. 2020. \href{https://doi.org/10.1111/zsc.12447}{Evolution of the african slippery frogs (anura: Conraua), including the world's largest living frog}. Zoologica Scripta 49:684--696. Wiley.
+Blackburn, D. C., S. V. Nielsen, M. F. Barej, J. Doumbia, M. Hirschfeld, N. G. Kouamé, D. Lawson, S. Loader, C. Ofori‐Boateng, E. L. Stanley, and M. Rödel. 2020. \href{https://doi.org/10.1111/zsc.12447}{Evolution of the {A}frican slippery frogs ({A}nura: {C}onraua), including the world's largest living frog}. Zoologica Scripta 49:684--696. Wiley.
 
 \bibitem[\citeproctext]{ref-Blomberg2003}
 Blomberg, S. P., T. Garland, and A. R. Ives. 2003. \href{https://doi.org/10.1111/j.0014-3820.2003.tb00285.x}{Testing for phylogenetic signal in comparative data: Behavioral traits are more labile}. Evolution 57:717--745. Wiley.
@@ -619,10 +619,10 @@ Box, G. E. P. 1976. \href{https://doi.org/10.1080/01621459.1976.10480949}{Scienc
 Boyko, J. D., and J. M. Beaulieu. 2021. \href{https://doi.org/10.1111/2041-210x.13534}{Generalized hidden markov models for phylogenetic comparative datasets}. Methods in Ecology and Evolution 12:468--478. Wiley.
 
 \bibitem[\citeproctext]{ref-Channing2019}
-Channing, A., and M.-O. Rödel. 2019. Field guide to frogs and other amphibians of africa. Struik Nature, Cape Town, South Africa.
+Channing, A., and M.-O. Rödel. 2019. Field guide to frogs and other amphibians of {A}frica. Struik Nature, Cape Town, South Africa.
 
 \bibitem[\citeproctext]{ref-Churchill2021}
-Churchill, M., and C. Baltz. 2021. \href{https://doi.org/10.1111/joa.13522}{Evolution of orbit size in toothed whales (artiodactyla: odontoceti)}. Journal of Anatomy 239:1419--1437. Wiley.
+Churchill, M., and C. Baltz. 2021. \href{https://doi.org/10.1111/joa.13522}{Evolution of orbit size in toothed whales ({A}rtiodactyla: {O}dontoceti)}. Journal of Anatomy 239:1419--1437. Wiley.
 
 \bibitem[\citeproctext]{ref-Cunningham1999}
 Cunningham, C. W. 1999. \href{https://doi.org/10.1080/106351599260238}{Some limitations of ancestral character-state reconstruction when testing evolutionary hypotheses}. Systematic Biology 48:665--674. Oxford University Press (OUP).
@@ -634,16 +634,16 @@ Cunningham, C. W., K. E. Omland, and T. H. Oakley. 1998. \href{https://doi.org/1
 Danis, T., and A. Rokas. 2023. The evolution of gestation length in eutherian mammals.
 
 \bibitem[\citeproctext]{ref-DurnCastillo2021}
-Durán‐Castillo, M., A. Hudson, Y. Wilson, D. L. Field, and A. D. Twyford. 2021. \href{https://doi.org/10.1111/nph.17581}{A phylogeny of antirrhinum reveals parallel evolution of alpine morphology}. New Phytologist 233:1426--1439. Wiley.
+Durán‐Castillo, M., A. Hudson, Y. Wilson, D. L. Field, and A. D. Twyford. 2021. \href{https://doi.org/10.1111/nph.17581}{A phylogeny of {A}ntirrhinum reveals parallel evolution of alpine morphology}. New Phytologist 233:1426--1439. Wiley.
 
 \bibitem[\citeproctext]{ref-Esquerr2019}
-Esquerré, D., I. G. Brennan, R. A. Catullo, F. Torres‐Pérez, and J. S. Keogh. 2019. \href{https://doi.org/10.1111/evo.13657}{How mountains shape biodiversity: The role of the andes in biogeography, diversification, and reproductive biology in south america's most species‐rich lizard radiation (squamata: liolaemidae)}. Evolution 73:214--230. Wiley.
+Esquerré, D., I. G. Brennan, R. A. Catullo, F. Torres‐Pérez, and J. S. Keogh. 2019. \href{https://doi.org/10.1111/evo.13657}{How mountains shape biodiversity: The role of the andes in biogeography, diversification, and reproductive biology in {S}outh {A}merica's most species‐rich lizard radiation ({S}quamata: {L}iolaemidae)}. Evolution 73:214--230. Wiley.
 
 \bibitem[\citeproctext]{ref-Evans2009}
-Evans, M. E. K., S. A. Smith, R. S. Flynn, and M. J. Donoghue. 2009. \href{https://doi.org/10.1086/595757}{Climate, niche evolution, and diversification of the {``bird‐cage''} evening primroses (oenothera, sections anogra and kleinia)}. The American Naturalist 173:225--240. University of Chicago Press.
+Evans, M. E. K., S. A. Smith, R. S. Flynn, and M. J. Donoghue. 2009. \href{https://doi.org/10.1086/595757}{Climate, niche evolution, and diversification of the {``bird‐cage''} evening primroses ({O}enothera, sections {A}nogra and {K}leinia)}. The American Naturalist 173:225--240. University of Chicago Press.
 
 \bibitem[\citeproctext]{ref-Faurby2016}
-Faurby, S., W. L. Eiserhardt, W. J. Baker, and J.-C. Svenning. 2016. \href{https://doi.org/10.1016/j.ympev.2016.03.002}{An all-evidence species-level supertree for the palms (arecaceae)}. Molecular Phylogenetics and Evolution 100:57--69. Elsevier BV.
+Faurby, S., W. L. Eiserhardt, W. J. Baker, and J.-C. Svenning. 2016. \href{https://doi.org/10.1016/j.ympev.2016.03.002}{An all-evidence species-level supertree for the palms ({A}recaceae)}. Molecular Phylogenetics and Evolution 100:57--69. Elsevier BV.
 
 \bibitem[\citeproctext]{ref-Felsenstein2012}
 Felsenstein, J. 2012. \href{https://doi.org/10.1086/663681}{A comparative method for both discrete and continuous characters using the threshold model}. The American Naturalist 179:145--156. University of Chicago Press.
@@ -667,13 +667,13 @@ Felsenstein, J. 2005. \href{https://doi.org/10.1098/rstb.2005.1669}{Using the qu
 FitzJohn, R. G., W. P. Maddison, and S. P. Otto. 2009. \href{https://doi.org/10.1093/sysbio/syp067}{Estimating trait-dependent speciation and extinction rates from incompletely resolved phylogenies}. Systematic Biology 58:595--611. Oxford University Press (OUP).
 
 \bibitem[\citeproctext]{ref-Gascuel2020}
-Gascuel, O., and M. Steel. 2020. \href{https://doi.org/10.1093/sysbio/syz054}{A darwinian uncertainty principle}. Systematic Biology 69:521--529. Oxford University Press (OUP).
+Gascuel, O., and M. Steel. 2020. \href{https://doi.org/10.1093/sysbio/syz054}{A {D}arwinian uncertainty principle}. Systematic Biology 69:521--529. Oxford University Press (OUP).
 
 \bibitem[\citeproctext]{ref-Gray2009}
 Gray, R. D., A. J. Drummond, and S. J. Greenhill. 2009. \href{https://doi.org/10.1126/science.1166858}{Language phylogenies reveal expansion pulses and pauses in pacific settlement}. Science 323:479--483. American Association for the Advancement of Science (AAAS).
 
 \bibitem[\citeproctext]{ref-Hall2018}
-Hall, K. C., P. J. Hundt, J. D. Swenson, A. P. Summers, and K. D. Crow. 2018. \href{https://doi.org/10.1002/jmor.20837}{The evolution of underwater flight: The redistribution of pectoral fin rays, in manta rays and their relatives (myliobatidae)}. Journal of Morphology 279:1155--1170. Wiley.
+Hall, K. C., P. J. Hundt, J. D. Swenson, A. P. Summers, and K. D. Crow. 2018. \href{https://doi.org/10.1002/jmor.20837}{The evolution of underwater flight: The redistribution of pectoral fin rays, in manta rays and their relatives ({M}yliobatidae)}. Journal of Morphology 279:1155--1170. Wiley.
 
 \bibitem[\citeproctext]{ref-Harmon2019-book}
 Harmon, L. J. 2019. Phylogenetic comparative methods: Learning from trees. Ecoevorxiv.
@@ -685,7 +685,7 @@ Harvey, P. H., and M. D. Pagel. 1991. The comparative method in evolutionary bio
 Huelsenbeck, J. P., R. Nielsen, and J. P. Bollback. 2003. \href{https://doi.org/10.1080/10635150390192780}{Stochastic mapping of morphological characters}. Systematic Biology 52:131--158. Oxford University Press (OUP).
 
 \bibitem[\citeproctext]{ref-Kirk2004}
-Kirk, E. C., and R. F. Kay. 2004. The evolution of high visual acuity in the anthropoidea. Pp. 539--602 \emph{in} C. F. Ross and R. F. Kay, eds. Anthropoid origins: New visions. Springer US, Boston, MA.
+Kirk, E. C., and R. F. Kay. 2004. The evolution of high visual acuity in the {A}nthropoidea. Pp. 539--602 \emph{in} C. F. Ross and R. F. Kay, eds. Anthropoid origins: New visions. Springer US, Boston, MA.
 
 \bibitem[\citeproctext]{ref-Kissling2019}
 Kissling, W. D., H. Balslev, W. J. Baker, J. Dransfield, B. Göldel, J. Y. Lim, R. E. Onstein, and J.-C. Svenning. 2019. \href{https://doi.org/10.1038/s41597-019-0189-0}{PalmTraits 1.0, a species-level functional trait database of palms worldwide}. Scientific Data 6. Springer Science; Business Media LLC.
@@ -700,7 +700,7 @@ Koshi, J. M., and R. A. Goldstein. 1996. \href{https://doi.org/10.1007/bf0219885
 Lewis, P. O. 2001. \href{https://doi.org/10.1080/106351501753462876}{A likelihood approach to estimating phylogeny from discrete morphological character data}. Systematic Biology 50:913--925. Oxford University Press (OUP).
 
 \bibitem[\citeproctext]{ref-Li2022}
-Li, Z.-Z., S. Lehtonen, K. Martins, Q.-F. Wang, and J.-M. Chen. 2022. \href{https://doi.org/10.1016/j.ympev.2021.107334}{Complete genus-level plastid phylogenomics of alismataceae with revisited historical biogeography}. Molecular Phylogenetics and Evolution 166:107334. Elsevier BV.
+Li, Z.-Z., S. Lehtonen, K. Martins, Q.-F. Wang, and J.-M. Chen. 2022. \href{https://doi.org/10.1016/j.ympev.2021.107334}{Complete genus-level plastid phylogenomics of {A}lismataceae with revisited historical biogeography}. Molecular Phylogenetics and Evolution 166:107334. Elsevier BV.
 
 \bibitem[\citeproctext]{ref-Losos2011}
 Losos, J. B. 2011. \href{https://doi.org/10.1086/660020}{Seeing the forest for the trees: The limitations of phylogenies in comparative biology: (American society of naturalists address)}. The American Naturalist 177:709--727. University of Chicago Press.
@@ -748,7 +748,7 @@ Pagel, M., and A. Meade. 2024. \href{http://www.evolution.rdg.ac.uk/BayesTraits.
 Paradis, E., and K. Schliep. 2019. \href{https://doi.org/10.1093/bioinformatics/bty633}{Ape 5.0: An environment for modern phylogenetics and evolutionary analyses in {R}}. Bioinformatics 35:526--528.
 
 \bibitem[\citeproctext]{ref-Pyron2013}
-Pyron, R., F. T. Burbrink, and J. J. Wiens. 2013. \href{https://doi.org/10.1186/1471-2148-13-93}{A phylogeny and revised classification of squamata, including 4161 species of lizards and snakes}. BMC Evolutionary Biology 13:93. Springer Science; Business Media LLC.
+Pyron, R., F. T. Burbrink, and J. J. Wiens. 2013. \href{https://doi.org/10.1186/1471-2148-13-93}{A phylogeny and revised classification of {S}quamata, including 4161 species of lizards and snakes}. BMC Evolutionary Biology 13:93. Springer Science; Business Media LLC.
 
 \bibitem[\citeproctext]{ref-Quinn2021}
 Quinn, J. J., M. G. Jones, R. A. Okimoto, S. Nanjo, M. M. Chan, N. Yosef, T. G. Bivona, and J. S. Weissman. 2021. \href{https://doi.org/10.1126/science.abc1944}{Single-cell lineages reveal the rates, routes, and drivers of metastasis in cancer xenografts}. Science 371. American Association for the Advancement of Science (AAAS).
@@ -769,7 +769,7 @@ Revell, L. J. 2014b. Graphical methods for visualizing comparative data on phylo
 Revell, L. J. 2024. \href{https://doi.org/10.7717/peerj.16505}{{p}hytools 2.0: An updated {R} ecosystem for phylogenetic comparative methods (and other things)}. PeerJ 12:e16505. PeerJ.
 
 \bibitem[\citeproctext]{ref-Revell2012}
-Revell, L. J. 2012. \href{https://doi.org/10.1111/j.2041-210x.2011.00169.x}{Phytools: An r package for phylogenetic comparative biology (and other things)}. Methods in Ecology and Evolution 3:217--223. Wiley.
+Revell, L. J. 2012. \href{https://doi.org/10.1111/j.2041-210x.2011.00169.x}{{p}hytools: An r package for phylogenetic comparative biology (and other things)}. Methods in Ecology and Evolution 3:217--223. Wiley.
 
 \bibitem[\citeproctext]{ref-Revell2013}
 Revell, L. J. 2013. \href{https://doi.org/10.1111/2041-210x.12066}{Two new graphical methods for mapping trait evolution on phylogenies}. Methods in Ecology and Evolution 4:754--759. Wiley.
@@ -787,7 +787,7 @@ Rohlf, F. J. 2001. \href{https://doi.org/10.1111/j.0014-3820.2001.tb00731.x}{Com
 Santini, L., D. Rojas, and G. Donati. 2015. \href{https://doi.org/10.1093/beheco/arv012}{Evolving through day and night: Origin and diversification of activity pattern in modern primates}. Behavioral Ecology 26:789--796. Oxford University Press (OUP).
 
 \bibitem[\citeproctext]{ref-Schliep2011}
-Schliep, K. P. 2011. \href{https://doi.org/10.1093/bioinformatics/btq706}{Phangorn: Phylogenetic analysis in r}. Bioinformatics 27:592--593.
+Schliep, K. P. 2011. \href{https://doi.org/10.1093/bioinformatics/btq706}{{p}hangorn: Phylogenetic analysis in r}. Bioinformatics 27:592--593.
 
 \bibitem[\citeproctext]{ref-Schluter1997}
 Schluter, D., T. Price, A. Ø. Mooers, and D. Ludwig. 1997. Likelihood of ancestor states in adaptive radiation. Evolution 51:1699--1711. Wiley.
